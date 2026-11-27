@@ -33,6 +33,7 @@ def run(force: bool = False, trigger: str | None = None) -> dict:
     with db.connect(config.MARKET_DB) as con:
         kw_before = con.execute("SELECT COUNT(*) FROM keywords").fetchone()[0]
         step("youtube", lambda: discovery.youtube_discovery(con, force))
+        step("extraction_produits", lambda: discovery.rebuild_youtube_signals(con))
         step("tendances_vers_produits", lambda: discovery.trends_to_keywords(con))
         step("saisies_manuelles", lambda: discovery.manual_to_keywords(con))
         step("creation_produits", lambda: discovery.promote(con))

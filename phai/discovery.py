@@ -39,14 +39,20 @@ def plan(con, n_searches: int, force: bool = False) -> list[dict]:
     # a) Boule de neige : mots-clés observés chez plusieurs créateurs, à approfondir
     n_snow = int(n_searches * s["snowball_share"])
     snow = []
+    # Priorité : produits créés à approfondir, puis noms précis (≥ 2 mots) vus une fois, à vérifier
+    # chez d'autres créateurs, puis rafraîchissement des produits (preuves < 30 jours).
     rows = con.execute(
-        "SELECT k.id, k.term, k.language, k.niche_slug, COUNT(DISTINCT v.channel_id) AS ch "
+        "SELECT k.id, k.term, k.language, k.niche_slug, COUNT(DISTINCT v.channel_id) AS ch, "
+        " CASE WHEN k.status='a_rechercher' THEN 0 WHEN k.status='observe' THEN 1 ELSE 2 END AS prio "
         "FROM keywords k JOIN keyword_signals ks ON ks.keyword_id=k.id AND ks.source='youtube' "
         "JOIN videos v ON v.external_id=ks.ref "
-        "WHERE (k.status='a_rechercher' OR (k.status='recherche' AND k.last_searched_at < ?)) "
-        "GROUP BY k.id ORDER BY ch DESC, k.last_seen DESC", (_ago(s["snowball_refresh_days"]),)).fetchall()
+        "WHERE k.status='a_rechercher' OR (k.status='observe' AND k.last_searched_at IS NULL AND k.term LIKE '% %') "
+        "   OR (k.status='recherche' AND k.last_searched_at < ? "
+        "       AND EXISTS (SELECT 1 FROM products p WHERE p.keyword_id=k.id AND p.status != 'elimine')) "
+        "GROUP BY k.id ORDER BY prio, ch DESC, LENGTH(k.term) DESC, k.last_seen DESC LIMIT 200",
+        (_ago(s["snowball_refresh_days"]),)).fetchall()
     for r in rows:
-        for region in regions.get(r["language"], [])[:2]:
+        for region in regions.get(r["language"], [])[: (2 if r["prio"] == 0 else 1)]:
             snow.append({"query": r["term"], "language": r["language"], "region": region,
                          "origin": "boule_de_neige", "niche": r["niche_slug"], "keyword_id": r["id"]})
     snow = snow[:n_snow]
@@ -103,7 +109,7 @@ def youtube_discovery(con, force: bool = False) -> dict:
         return {"statut": "quota_atteint", "message": "Plafond quotidien de quota YouTube atteint"}
     queries = plan(con, n, force)
     since = _ago(30).replace("+00:00", "Z")
-    meta, new_kw, errors, done = {}, 0, [], 0
+    meta, errors, done = {}, [], 0
     for q in queries:
         try:
             items = yt.search(con, key, q["query"], q["region"], q["language"], since, s["max_results_per_search"])
@@ -126,16 +132,38 @@ def youtube_discovery(con, force: bool = False) -> dict:
     vids = yt.videos(con, key, list(meta)) if meta else []
     subs = yt.channels(con, key, list({v["snippet"]["channelId"] for v in vids})) if vids else {}
     yt.store_videos(con, vids, meta, subs)
-    for v in vids:
-        _q, region, lang, niche = meta[v["id"]]
-        text = f"{v['snippet'].get('title', '')} | {(v['snippet'].get('description') or '')[:300]}"
-        for phrase in extract.extract(text, lang):
-            kw_id, created = upsert_keyword(con, phrase, lang, niche)
-            new_kw += created
-            add_signal(con, kw_id, "youtube", v["id"], region)
     con.commit()
-    return {"statut": "ok", "recherches": done, "videos": len(vids), "nouveaux_mots_cles": new_kw,
+    return {"statut": "ok", "recherches": done, "videos": len(vids),
             "unites_quota": yt.units_used_today(con), "erreurs": errors}
+
+
+def rebuild_youtube_signals(con) -> dict:
+    """(Re)calcule les mots-clés à partir des vidéos en base. Sans appel à l'API : les améliorations
+    de l'extraction s'appliquent ainsi à tout l'historique, sans consommer de quota."""
+    niche_of = {(r["query"], r["language"], r["region"]): r["niche_slug"]
+                for r in con.execute("SELECT query, language, region, niche_slug FROM query_log")}
+    con.execute("DELETE FROM keyword_signals WHERE source='youtube'")
+    n_sig = 0
+    for v in con.execute("SELECT external_id, title, description, query, region, language FROM videos "
+                         "WHERE platform='youtube'").fetchall():
+        qlang = next((lang for (q, lang, reg) in niche_of if q == v["query"] and reg == v["region"]), None)
+        niche = niche_of.get((v["query"], qlang, v["region"]))
+        text = f"{v['title'] or ''} | {(v['description'] or '')[:120]}"
+        # La vidéo n'est pas forcément dans la langue de la requête : langue de la requête,
+        # langue déclarée par la vidéo, et anglais (langue dominante des titres de produits).
+        langs = dict.fromkeys(x for x in (qlang, (v["language"] or "")[:2], "en") if x)
+        for lang in langs:
+            for phrase in extract.extract(text, lang):
+                for form in [phrase] + extract.variants(phrase, lang):
+                    kw_id, _ = upsert_keyword(con, form, lang, niche)
+                    add_signal(con, kw_id, "youtube", v["external_id"], v["region"])
+                    n_sig += 1
+    # Mots-clés devenus orphelins (aucune observation, pas de produit) : supprimés
+    removed = con.execute(
+        "DELETE FROM keywords WHERE status='observe' AND id NOT IN (SELECT keyword_id FROM keyword_signals) "
+        "AND dedup_key NOT IN (SELECT dedup_key FROM products)").rowcount
+    con.commit()
+    return {"observations": n_sig, "mots_cles_supprimes": removed}
 
 
 def trends_to_keywords(con) -> dict:
@@ -178,9 +206,19 @@ def promote(con) -> dict:
         " (SELECT COUNT(*) FROM keyword_signals ks WHERE ks.keyword_id=k.id AND ks.source='google_trends') AS tr, "
         " (SELECT COUNT(*) FROM keyword_signals ks WHERE ks.keyword_id=k.id AND ks.source='manuel') AS mn "
         "FROM keywords k WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.dedup_key=k.dedup_key)").fetchall()
+    eligible = [k for k in rows if k["ch"] >= min_ch or (k["ch"] >= 1 and k["tr"] >= 1) or k["mn"] >= 1]
+    chans = {k["id"]: frozenset(r[0] for r in con.execute(
+        "SELECT DISTINCT v.channel_id FROM keyword_signals ks JOIN videos v ON v.external_id=ks.ref "
+        "WHERE ks.keyword_id=? AND ks.source='youtube'", (k["id"],))) for k in eligible}
+    existing = [(r["term"], frozenset(r2[0] for r2 in con.execute(
+        "SELECT DISTINCT v.channel_id FROM keyword_signals ks JOIN videos v ON v.external_id=ks.ref "
+        "WHERE ks.keyword_id=? AND ks.source='youtube'", (r["keyword_id"],))))
+        for r in con.execute("SELECT p.keyword_id, k.term FROM products p JOIN keywords k ON k.id=p.keyword_id")]
+    pool = existing + [(k["term"], chans[k["id"]]) for k in eligible]
     new = 0
-    for k in rows:
-        if not (k["ch"] >= min_ch or (k["ch"] >= 1 and k["tr"] >= 1) or k["mn"] >= 1):
+    for k in sorted(eligible, key=lambda k: -len(k["term"])):
+        # Forme générale sans créateur supplémentaire (« spray keychain » ⊂ « pepper spray keychain ») : ignorée
+        if not k["mn"] and any(f" {k['term']} " in f" {t} " and t != k["term"] and c >= chans[k["id"]] for t, c in pool):
             continue
         hits = risk.assess(k["term"])
         status, reason = risk.status_from_risks(hits)

@@ -43,6 +43,7 @@ def test_end_to_end(monkeypatch, tmp_db):
         r = discovery.youtube_discovery(con)
         assert r["statut"] == "ok" and r["videos"] == 5
         assert r["unites_quota"] <= config.settings()["discovery"]["youtube_units_per_run"]
+        discovery.rebuild_youtube_signals(con)
         assert discovery.promote(con)["nouveaux_produits"] == 2
         prods = {p["canonical_name"]: p for p in con.execute("SELECT * FROM products")}
         assert prods["sunset lamp"]["status"] == "candidat"

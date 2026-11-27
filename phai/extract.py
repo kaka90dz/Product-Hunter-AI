@@ -45,6 +45,8 @@ def lexicon():
     d = config.discovery()
     heads = {lang: {singular(h, lang) for h in hs} for lang, hs in d["heads"].items()}
     hype = {w.lower() for w in d["hype_words"]}
+    for words in d.get("stopwords", {}).values():   # mots grammaticaux de toutes les langues
+        hype |= {str(w).lower() for w in words}
     return heads, hype, {c.lower() for c in d["connectors"]}
 
 
@@ -94,19 +96,38 @@ def extract(text: str, lang: str) -> list[str]:
                         found.append(" ".join([tok] + tail))
                     elif lang == "de" and i > 0 and _is_modifier(toks[i - 1], hype):
                         found.append(f"{toks[i - 1]} {tok}")
-            elif lang in COMPOUND and len(s) >= 7:
+            elif lang in COMPOUND and len(s) >= 8:
                 for h in heads:
-                    if len(h) >= 4 and s.endswith(h) and len(s) - len(h) >= 3 and s not in hype:
+                    if len(h) >= 5 and s.endswith(h) and len(s) - len(h) >= 3 and s not in hype:
                         found.append(tok)
                         break
     # Garder les groupes les plus complets : « car vacuum » est inclus dans « car vacuum cleaner ».
     def inside(a: str, b: str) -> bool:
         return a != b and f" {a} " in f" {b} "
     found = [f for f in found if not any(inside(f, g) for g in found)]
+    found = [f for f in found if len(set(f.split())) == len(f.split())]   # « air fryer air fryer »
     out, seen = [], set()
     for f in found:
         k = dedup_key(f, lang)
         if k not in seen:
             seen.add(k)
             out.append(f)
+    return out
+
+
+def variants(phrase: str, lang: str) -> list[str]:
+    """Formes plus générales d'un nom de produit, pour regrouper les créateurs :
+    « crispi glass air fryer » → « glass air fryer », « air fryer »."""
+    heads_all, _, connectors = lexicon()
+    heads = heads_all.get(lang, set())
+    toks = phrase.split()
+    out = []
+    if lang in HEAD_FINAL:
+        for k in range(2, len(toks)):
+            out.append(" ".join(toks[-k:]))
+    elif len(toks) > 2 and singular(toks[0], lang) in heads:
+        for k in range(2, len(toks)):
+            sub = toks[:k]
+            if sub[-1] not in connectors:
+                out.append(" ".join(sub))
     return out
