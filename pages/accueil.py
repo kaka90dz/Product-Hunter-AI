@@ -102,6 +102,8 @@ else:
     top = p[p["statut"] == "candidat"].head(10).copy()
     top["score"] = top.apply(lambda r: f"{r['points']:.0f} / {r['max_evaluable']:.0f}" if pd.notna(r["points"]) else "—", axis=1)
     st.dataframe(top[["produit", "niche", "langue", "score", "confiance", "createurs"]], hide_index=True,
-                 use_container_width=True, column_config={"score": "Points / évaluables", "createurs": "Créateurs"})
+                 use_container_width=True, column_config={"produit": "Produit", "niche": "Niche", "langue": "Langue",
+                                                          "score": "Points / évaluables", "confiance": "Confiance",
+                                                          "createurs": "Créateurs"})
     st.caption("Score partiel : seules les composantes avec des preuves sont notées. Aucun produit n'est "
                "déclaré gagnant tant que fournisseurs et rentabilité ne sont pas vérifiés.")

@@ -115,6 +115,8 @@ def products() -> pd.DataFrame:
     d["createurs"] = det.map(lambda x: x.get("createurs_independants"))
     d["sources"] = det.map(lambda x: x.get("types_de_sources"))
     d["details"] = det
+    d["niche"] = d["niche"].fillna("—")
+    d["decouvert_le"] = pd.to_datetime(d["decouvert_le"], errors="coerce", utc=True).dt.strftime("%d/%m/%Y")
     return d.drop(columns=["details_json"])
 
 

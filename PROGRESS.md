@@ -8,7 +8,7 @@
 | Élément | Test |
 |---|---|
 | Collecte Google Trends RSS (19 pays), taux BCE, PIB/hab. PPA | Réel, sur GitHub Actions (27/11) |
-| Moteur de découverte YouTube (requêtes multilingues, niches, boule de neige, quota plafonné) | Test de bout en bout avec API simulée ; **réel : en attente de la clé** |
+| Moteur de découverte YouTube (requêtes multilingues, niches, boule de neige, quota plafonné) | **Réel sur GitHub Actions (27/11)** : 58 recherches, 939 vidéos, ~530 mots-clés, 31 produits candidats découverts sans nom fourni |
 | Extraction de noms de produits (9 langues, règles sans IA) | Tests unitaires |
 | Filtres de risque (éliminatoires / en attente) | Tests unitaires |
 | Création de produits candidats (≥ 2 créateurs, ou YouTube + Trends, ou saisie manuelle) | Tests |
@@ -27,6 +27,12 @@
 - Étape 6 : paramètres modifiables depuis l'interface, rapports quotidiens/hebdomadaires.
 - Étape 7 : commandes Claude (/hunt, /validate-product…), modes Standard et Deep.
 - Fusion des produits identiques entre langues (alias) : manuel ou Claude (mode Standard).
+
+### Premiers produits découverts (27/11/2026, 2 recherches, confiance faible)
+full-body / bubble umbrella, electric water dispenser, medicine dispenser, electric hot water bag, steering cover,
+infuser basket, cane earrings, 2-in-1 cordless electric broom, phone holder, spout pouch… Bruit restant : termes
+génériques (kitchen tools, water pump, dc fans) et matériel lourd (smith machine, power rack) — filtrés plus tard
+par les critères fournisseurs/logistique (étape 5).
 
 ### Analyses déjà faites (ne pas refaire)
 - Audit des sources (25 et 27/11/2026) : voir `config/sources.yaml`.

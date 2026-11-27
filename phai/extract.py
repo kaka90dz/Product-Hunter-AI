@@ -98,7 +98,7 @@ def extract(text: str, lang: str) -> list[str]:
                         found.append(f"{toks[i - 1]} {tok}")
             elif lang in COMPOUND and len(s) >= 8:
                 for h in heads:
-                    if len(h) >= 5 and s.endswith(h) and len(s) - len(h) >= 3 and s not in hype:
+                    if len(h) >= 5 and s.endswith(h) and len(s) - len(h) >= 4 and s not in hype:
                         found.append(tok)
                         break
     # Garder les groupes les plus complets : « car vacuum » est inclus dans « car vacuum cleaner ».

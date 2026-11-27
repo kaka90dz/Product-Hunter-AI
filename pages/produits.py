@@ -14,9 +14,10 @@ if p.empty:
 STATUTS = {"candidat": "🔍 Candidat à approfondir", "en_attente": "⏸️ En attente (risque à vérifier)",
            "elimine": "⛔ Éliminé", "preselectionne": "✅ Présélectionné", "finaliste": "🏁 Finaliste"}
 c1, c2, c3 = st.columns(3)
-statut = c1.multiselect("Statut", list(STATUTS), default=["candidat", "en_attente"], format_func=STATUTS.get)
-niches = sorted(p["niche"].dropna().unique())
-niche = c2.multiselect("Niche", niches)
+statut = c1.multiselect("Statut", list(STATUTS), default=["candidat", "en_attente"], format_func=STATUTS.get,
+                        placeholder="Tous")
+niches = sorted(n for n in p["niche"].unique() if n != "—")
+niche = c2.multiselect("Niche", niches, placeholder="Toutes")
 texte = c3.text_input("Rechercher")
 f = p[p["statut"].isin(statut)] if statut else p
 if niche:
@@ -30,7 +31,9 @@ view["score"] = view.apply(lambda r: f"{r['points']:.0f} / {r['max_evaluable']:.
 st.write(f"**{len(view)}** produit(s)")
 st.dataframe(view[["produit", "niche", "langue", "statut", "score", "confiance", "createurs", "decouvert_le"]],
              hide_index=True, use_container_width=True,
-             column_config={"score": "Points / évaluables", "createurs": "Créateurs", "decouvert_le": "Découvert le"})
+             column_config={"produit": "Produit", "niche": "Niche", "langue": "Langue", "statut": "Statut",
+                            "score": "Points / évaluables", "confiance": "Confiance", "createurs": "Créateurs",
+                            "decouvert_le": "Découvert le"})
 st.download_button("Exporter en CSV", view.drop(columns=["details"]).to_csv(index=False).encode("utf-8"),
                    "produits.csv", "text/csv")
 
@@ -41,7 +44,7 @@ if f.empty:
 pid = st.selectbox("Fiche détaillée", f["id"].tolist(), format_func=lambda i: f.loc[f["id"] == i, "produit"].iloc[0])
 row = f[f["id"] == pid].iloc[0]
 st.header(row["produit"])
-st.write(f"{STATUTS.get(row['statut'], row['statut'])} · Langue : {row['langue']} · Niche : {row['niche'] or '—'} · "
+st.write(f"{STATUTS.get(row['statut'], row['statut'])} · Langue : {row['langue']} · Niche : {row['niche']} · "
          f"Origine : {row['origine']}")
 if row["motif"]:
     st.warning(row["motif"])

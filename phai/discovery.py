@@ -151,19 +151,30 @@ def rebuild_youtube_signals(con) -> dict:
         text = f"{v['title'] or ''} | {(v['description'] or '')[:120]}"
         # La vidéo n'est pas forcément dans la langue de la requête : langue de la requête,
         # langue déclarée par la vidéo, et anglais (langue dominante des titres de produits).
-        langs = dict.fromkeys(x for x in (qlang, (v["language"] or "")[:2], "en") if x)
+        langs = dict.fromkeys(x for x in ("en", qlang, (v["language"] or "")[:2]) if x)
+        seen_tokens: set[str] = set()   # un même nom n'est compté qu'une fois, en anglais en priorité
         for lang in langs:
             for phrase in extract.extract(text, lang):
+                tok_key = extract.dedup_key(phrase, "xx")
+                if tok_key in seen_tokens:
+                    continue
+                seen_tokens.add(tok_key)
                 for form in [phrase] + extract.variants(phrase, lang):
                     kw_id, _ = upsert_keyword(con, form, lang, niche)
                     add_signal(con, kw_id, "youtube", v["external_id"], v["region"])
                     n_sig += 1
-    # Mots-clés devenus orphelins (aucune observation, pas de produit) : supprimés
-    removed = con.execute(
-        "DELETE FROM keywords WHERE status='observe' AND id NOT IN (SELECT keyword_id FROM keyword_signals) "
-        "AND dedup_key NOT IN (SELECT dedup_key FROM products)").rowcount
+    # Produits découverts dont plus aucune observation ne subsiste (extraction corrigée ou preuves
+    # expirées sans rafraîchissement) : supprimés. Les produits saisis à la main sont conservés.
+    orphan = "SELECT id FROM keywords WHERE id NOT IN (SELECT keyword_id FROM keyword_signals)"
+    gone = [r[0] for r in con.execute(f"SELECT id FROM products WHERE origin='decouverte' AND keyword_id IN ({orphan})")]
+    for pid in gone:
+        for table in ("risks", "scores", "evidence"):
+            con.execute(f"DELETE FROM {table} WHERE product_id=?", (pid,))
+        con.execute("DELETE FROM products WHERE id=?", (pid,))
+    removed = con.execute(f"DELETE FROM keywords WHERE id IN ({orphan}) "
+                          "AND dedup_key NOT IN (SELECT dedup_key FROM products)").rowcount
     con.commit()
-    return {"observations": n_sig, "mots_cles_supprimes": removed}
+    return {"observations": n_sig, "mots_cles_supprimes": removed, "produits_sans_preuve_supprimes": len(gone)}
 
 
 def trends_to_keywords(con) -> dict:
