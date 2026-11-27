@@ -28,12 +28,14 @@ if texte:
 view = f.copy()
 view["statut"] = view["statut"].map(STATUTS)
 view["score"] = view.apply(lambda r: f"{r['points']:.0f} / {r['max_evaluable']:.0f}" if pd.notna(r["points"]) else "—", axis=1)
-st.write(f"**{len(view)}** produit(s)")
-st.dataframe(view[["produit", "niche", "langue", "statut", "score", "confiance", "createurs", "decouvert_le"]],
-             hide_index=True, use_container_width=True,
-             column_config={"produit": "Produit", "niche": "Niche", "langue": "Langue", "statut": "Statut",
-                            "score": "Points / évaluables", "confiance": "Confiance", "createurs": "Créateurs",
-                            "decouvert_le": "Découvert le"})
+view = view.reset_index(drop=True)
+st.write(f"**{len(view)}** produit(s) — 👆 **touchez une ligne pour ouvrir sa fiche** (case à gauche)")
+event = st.dataframe(
+    view[["produit", "niche", "langue", "statut", "score", "confiance", "createurs", "decouvert_le"]],
+    hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key="table_produits",
+    column_config={"produit": "Produit", "niche": "Niche", "langue": "Langue", "statut": "Statut",
+                   "score": "Points / évaluables", "confiance": "Confiance", "createurs": "Créateurs",
+                   "decouvert_le": "Découvert le"})
 st.download_button("Exporter en CSV", view.drop(columns=["details"]).to_csv(index=False).encode("utf-8"),
                    "produits.csv", "text/csv")
 
@@ -41,7 +43,11 @@ st.download_button("Exporter en CSV", view.drop(columns=["details"]).to_csv(inde
 st.divider()
 if f.empty:
     st.stop()
-pid = st.selectbox("Fiche détaillée", f["id"].tolist(), format_func=lambda i: f.loc[f["id"] == i, "produit"].iloc[0])
+rows = event.selection.rows if event and event.selection else []
+ids = view["id"].tolist()
+default = ids.index(int(view.loc[rows[0], "id"])) if rows else 0
+pid = st.selectbox("📄 Fiche détaillée du produit", ids, index=default,
+                   format_func=lambda i: view.loc[view["id"] == i, "produit"].iloc[0])
 row = f[f["id"] == pid].iloc[0]
 st.header(row["produit"])
 st.write(f"{STATUTS.get(row['statut'], row['statut'])} · Langue : {row['langue']} · Niche : {row['niche']} · "
