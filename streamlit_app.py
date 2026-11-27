@@ -7,7 +7,7 @@ import streamlit as st
 
 # Après une mise à jour du code sur GitHub, Streamlit Cloud relance cette page sans toujours
 # recharger les modules déjà importés : on recharge ceux dont le fichier a changé.
-_loaded = st.session_state.setdefault("_module_mtimes", {})
+_loaded = sys.__dict__.setdefault("_phai_module_mtimes", {})   # mémoire du processus, pas de la session
 for _name in sorted(n for n in list(sys.modules) if n == "phai" or n.startswith("phai.")):
     _mod = sys.modules[_name]
     _file = getattr(_mod, "__file__", None)
