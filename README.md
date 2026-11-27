@@ -1,8 +1,18 @@
-# Product-Hunter-AI
+# Product Hunter AI
 
-Système automatisé de recherche internationale de produits e-commerce.
+Recherche internationale de produits e-commerce (dropshipping, marketing organique).
 
-> Statut : environnement préparé, développement non commencé (en attente du cahier des charges).
+- Besoin complet : [`CAHIER_DES_CHARGES.md`](CAHIER_DES_CHARGES.md)
+- Avancement : [`docs/AVANCEMENT.md`](docs/AVANCEMENT.md)
 
-- `.mcp.json` : serveur Playwright MCP (navigateur Chromium sans interface) déclaré au niveau du projet.
-- `docs/ENVIRONNEMENT.md` : audit de l'environnement et des accès aux sources.
+## Utilisation
+- **Tableau de bord** : Streamlit Community Cloud (fichier principal `streamlit_app.py`).
+- **Collecte automatique** : GitHub Actions, chaque jour (onglet *Actions* → *Collecte quotidienne* → *Run workflow*
+  pour la lancer à la main). Sans IA, donc sans crédits Claude.
+
+## Développement
+```bash
+pip install -r requirements-dev.txt
+python -m phai collect
+streamlit run streamlit_app.py
+```

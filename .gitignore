@@ -4,7 +4,12 @@ __pycache__/
 .venv/
 .env
 .env.*
-data/raw/
+!.env.example
 *.log
 .playwright-mcp/
-!.env.example
+.pytest_cache/
+.streamlit/secrets.toml
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/cache/

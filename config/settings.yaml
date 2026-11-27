@@ -1,0 +1,48 @@
+# Paramètres par défaut. Les modifications faites depuis l'interface sont
+# enregistrées dans data/user.db et prennent le pas sur ces valeurs.
+mode: eco                # eco | standard | deep
+budget:
+  total_eur_max: 200
+financial:
+  supplier_cost_eur: {min: 3, max: 20}     # coût fournisseur livré
+  sale_price_eur: {min: 25, max: 70}
+  min_product_margin_pct: 60
+  max_sample_cost_eur: 40
+  max_delivery_days: 10
+  min_video_concepts: 20
+weights_product:          # total 100
+  viral: 25
+  profitability: 20
+  demand: 15
+  problem_solved: 15
+  competition: 10
+  supplier_reliability: 10
+  video_ease: 5
+weights_market:           # total 100
+  local_demand: 25
+  organic_potential: 20
+  competition: 15
+  local_profitability: 15
+  logistics: 10
+  regulatory: 10
+  language_culture: 5
+countries_excluded: []    # codes ISO, ex. ["NO", "CH"]
+cache_ttl_hours:          # une collecte n'est pas relancée si plus récente
+  google_trends_rss: 6
+  fx_rates: 20
+  worldbank: 720
+  youtube: 24
+quotas:
+  youtube_units_per_run: 2000   # quota gratuit Google : 10 000 / jour
+  http_delay_seconds: 1.5
+youtube:
+  max_age_days: 30
+  seed_queries:              # requêtes de découverte, par langue
+    en: ["tiktok made me buy it", "amazon finds gadget", "problem solving gadget"]
+    fr: ["produit tiktok", "gadget utile maison"]
+    de: ["tiktok produkte", "nützliche gadgets"]
+    es: ["productos virales tiktok"]
+    it: ["prodotti virali tiktok"]
+  regions: ["US", "GB", "FR", "DE", "ES", "IT", "AU", "CA"]
+resident_country: FR
+legal_status: a_preciser       # particulier | micro_entreprise | societe | a_preciser

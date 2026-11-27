@@ -1,0 +1,20 @@
+# Référentiel statique (identité des marchés, pas de données de marché).
+- {code: US, name_fr: États-Unis,      currency: USD, languages: [en], region: Amérique du Nord}
+- {code: CA, name_fr: Canada,          currency: CAD, languages: [en, fr], region: Amérique du Nord}
+- {code: GB, name_fr: Royaume-Uni,     currency: GBP, languages: [en], region: Europe}
+- {code: AU, name_fr: Australie,       currency: AUD, languages: [en], region: Océanie}
+- {code: NZ, name_fr: Nouvelle-Zélande, currency: NZD, languages: [en], region: Océanie}
+- {code: FR, name_fr: France,          currency: EUR, languages: [fr], region: Europe}
+- {code: DE, name_fr: Allemagne,       currency: EUR, languages: [de], region: Europe}
+- {code: ES, name_fr: Espagne,         currency: EUR, languages: [es], region: Europe}
+- {code: IT, name_fr: Italie,          currency: EUR, languages: [it], region: Europe}
+- {code: BE, name_fr: Belgique,        currency: EUR, languages: [fr, nl], region: Europe}
+- {code: CH, name_fr: Suisse,          currency: CHF, languages: [de, fr, it], region: Europe}
+- {code: NL, name_fr: Pays-Bas,        currency: EUR, languages: [nl], region: Europe}
+- {code: SE, name_fr: Suède,           currency: SEK, languages: [sv], region: Europe}
+- {code: "NO", name_fr: Norvège,         currency: NOK, languages: ["no"], region: Europe}
+- {code: DK, name_fr: Danemark,        currency: DKK, languages: [da], region: Europe}
+- {code: AT, name_fr: Autriche,        currency: EUR, languages: [de], region: Europe}
+- {code: IE, name_fr: Irlande,         currency: EUR, languages: [en], region: Europe}
+- {code: PL, name_fr: Pologne,         currency: PLN, languages: [pl], region: Europe}
+- {code: PT, name_fr: Portugal,        currency: EUR, languages: [pt], region: Europe}
