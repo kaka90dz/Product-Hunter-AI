@@ -8,7 +8,7 @@ import json
 
 from phai import db
 
-COLLECTORS = ["google_trends_rss", "fx", "worldbank", "youtube"]
+COLLECTORS = ["google_trends_rss", "fx", "worldbank"]
 
 
 def cmd_init(_args):
@@ -34,12 +34,35 @@ def cmd_collect(args):
         raise SystemExit(1)
 
 
+def cmd_run(args):
+    from phai import pipeline
+
+    r = pipeline.run(force=args.force)
+    print(json.dumps(r, ensure_ascii=False, indent=2, default=str))
+
+
+def cmd_verify(args):
+    """Vérifie l'intégrité d'une base (test de restauration)."""
+    import sqlite3
+    from pathlib import Path
+
+    for name in ("market.db", "user.db"):
+        path = Path(args.dir) / name
+        con = sqlite3.connect(path)
+        ok = con.execute("PRAGMA integrity_check").fetchone()[0]
+        tables = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        counts = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
+        print(name, ok, counts)
+        if ok != "ok":
+            raise SystemExit(f"{name} corrompue")
+
+
 def cmd_status(_args):
     from phai import config
 
     db.init_all()
     with db.connect(config.MARKET_DB) as con:
-        for t in ["trend_signals", "fx_rates", "country_indicators", "videos", "video_stats", "products"]:
+        for t in ["trend_signals", "fx_rates", "country_indicators", "videos", "video_stats", "keywords", "products"]:
             print(f"{t:20} {con.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]}")
         print("\nDernières collectes :")
         for r in con.execute(
@@ -58,5 +81,11 @@ def main(argv=None):
     c.add_argument("--strict", action="store_true", help="Code d'erreur si une source échoue")
     c.set_defaults(func=cmd_collect)
     sub.add_parser("status", help="Résumé de la base").set_defaults(func=cmd_status)
+    r = sub.add_parser("run", help="Recherche complète de produits (mode Eco, sans IA)")
+    r.add_argument("--force", action="store_true")
+    r.set_defaults(func=cmd_run)
+    v = sub.add_parser("verify", help="Tester l'intégrité des bases d'un dossier")
+    v.add_argument("dir")
+    v.set_defaults(func=cmd_verify)
     args = p.parse_args(argv)
     args.func(args)

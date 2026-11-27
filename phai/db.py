@@ -20,9 +20,19 @@ def connect(path: Path) -> sqlite3.Connection:
     return con
 
 
+# Tables dont le schéma a changé : recréées uniquement si elles sont vides.
+_REBUILD_IF_EMPTY = {"keywords": "dedup_key", "products": "origin", "videos": "format_hint"}
+
+
 def init(path: Path, schema_file: str) -> None:
     sql = (SCHEMA_DIR / schema_file).read_text(encoding="utf-8")
     with connect(path) as con:
+        for table, required_col in _REBUILD_IF_EMPTY.items():
+            cols = [r[1] for r in con.execute(f"PRAGMA table_info({table})")]
+            if cols and required_col not in cols:
+                if con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]:
+                    raise RuntimeError(f"Migration manuelle requise pour la table {table}")
+                con.execute(f"DROP TABLE {table}")
         con.executescript(sql)
 
 

@@ -1,0 +1,68 @@
+name: Maintenance hebdomadaire (sauvegarde, restauration, compactage)
+
+on:
+  schedule:
+    - cron: "43 3 * * 1"            # chaque lundi à 03:43 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-write
+  cancel-in-progress: false
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KEEP_BACKUPS: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: datastore
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Nettoyage (conservation des données) et compactage SQLite
+        env:
+          PHAI_DATA_DIR: datastore
+        run: |
+          python - <<'PY'
+          from phai import config, db, retention
+          db.init_all()
+          with db.connect(config.MARKET_DB) as con:
+              print(retention.apply(con))
+          for p in (config.MARKET_DB, config.USER_DB):
+              c = db.connect(p); c.execute("VACUUM"); c.close()
+          PY
+      - name: Sauvegarde (release GitHub privée)
+        run: |
+          TAG="sauvegarde-$(date -u +%Y-%m-%d)"
+          mkdir backup && gzip -c datastore/market.db > backup/market.db.gz && gzip -c datastore/user.db > backup/user.db.gz
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" backup/*.gz --title "$TAG" --notes "Sauvegarde automatique des bases" --target main
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^sauvegarde-' | sort -r \
+            | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r -I{} gh release delete {} --yes --cleanup-tag
+      - name: Test de restauration
+        run: |
+          TAG="sauvegarde-$(date -u +%Y-%m-%d)"
+          mkdir restored && gh release download "$TAG" --dir restored --pattern '*.gz' && gunzip restored/*.gz
+          python -m phai verify restored
+      - name: Compactage de l'historique de la branche data
+        working-directory: datastore
+        run: |
+          OLD=$(git rev-parse HEAD)
+          git config user.name "product-hunter-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan compact && git add -A
+          git commit -q -m "Données (historique compacté le $(date -u +%Y-%m-%d))"
+          git push -q --force-with-lease=data:$OLD origin compact:data \
+            || echo "Branche modifiée pendant la maintenance : compactage reporté à la semaine prochaine"

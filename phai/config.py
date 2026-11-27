@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT / "config"
-DATA_DIR = ROOT / "data"
+DATA_DIR = Path(os.environ.get("PHAI_DATA_DIR") or ROOT / "data").resolve()
 MARKET_DB = DATA_DIR / "market.db"
 USER_DB = DATA_DIR / "user.db"
 
@@ -29,6 +30,10 @@ def countries() -> list[dict]:
 
 def sources() -> list[dict]:
     return _load_yaml("sources.yaml")
+
+
+def discovery() -> dict:
+    return _load_yaml("discovery.yaml")
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

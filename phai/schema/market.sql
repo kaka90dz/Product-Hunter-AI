@@ -41,21 +41,19 @@ CREATE TABLE IF NOT EXISTS niches(
 CREATE TABLE IF NOT EXISTS products(
   id INTEGER PRIMARY KEY,
   canonical_name TEXT NOT NULL,
+  language TEXT,
+  keyword_id INTEGER,
+  origin TEXT NOT NULL DEFAULT 'decouverte',   -- decouverte | manuel
   dedup_key TEXT UNIQUE NOT NULL,          -- clé normalisée pour la déduplication
   niche_id INTEGER REFERENCES niches(id),
   description TEXT,
-  status TEXT NOT NULL DEFAULT 'detecte',  -- detecte | elimine | en_attente | preselectionne | finaliste
+  status TEXT NOT NULL DEFAULT 'candidat',  -- candidat (à approfondir) | en_attente | elimine | preselectionne | finaliste
   status_reason TEXT,
   first_seen TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS product_aliases(
   product_id INTEGER NOT NULL REFERENCES products(id), alias TEXT NOT NULL, language TEXT, source TEXT,
   PRIMARY KEY(product_id, alias)
-);
-CREATE TABLE IF NOT EXISTS keywords(
-  id INTEGER PRIMARY KEY, term TEXT NOT NULL, language TEXT NOT NULL,
-  product_id INTEGER REFERENCES products(id), niche_id INTEGER REFERENCES niches(id),
-  UNIQUE(term, language)
 );
 CREATE TABLE IF NOT EXISTS evidence(               -- preuves rattachées aux scores
   id INTEGER PRIMARY KEY, product_id INTEGER REFERENCES products(id), country TEXT,
@@ -67,10 +65,11 @@ CREATE TABLE IF NOT EXISTS videos(
   id INTEGER PRIMARY KEY, platform TEXT NOT NULL, external_id TEXT NOT NULL, url TEXT NOT NULL,
   title TEXT, channel_id TEXT, channel_title TEXT, published_at TEXT, duration_s INTEGER,
   language TEXT, query TEXT, region TEXT, product_id INTEGER REFERENCES products(id),
-  first_seen TEXT NOT NULL, UNIQUE(platform, external_id)
+  format_hint TEXT,             -- indice de format (YouTube ne signale pas les Shorts dans l'API)
+  description TEXT, first_seen TEXT NOT NULL, UNIQUE(platform, external_id)
 );
-CREATE TABLE IF NOT EXISTS video_stats(            -- relevés successifs (croissance des vues)
-  video_id INTEGER NOT NULL REFERENCES videos(id), collected_at TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS video_stats(            -- relevés bruts ; conservés < 30 jours (règles YouTube)
+  video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE, collected_at TEXT NOT NULL,
   views INTEGER, likes INTEGER, comments INTEGER, channel_subscribers INTEGER,
   PRIMARY KEY(video_id, collected_at)
 );
@@ -106,3 +105,35 @@ CREATE TABLE IF NOT EXISTS reports(
 );
 CREATE INDEX IF NOT EXISTS idx_trend_country ON trend_signals(country, collected_at);
 CREATE INDEX IF NOT EXISTS idx_runs_collector ON collection_runs(collector, finished_at);
+
+-- Moteur de découverte -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS keywords(              -- groupes nominaux extraits (données propres)
+  id INTEGER PRIMARY KEY,
+  dedup_key TEXT UNIQUE NOT NULL,
+  term TEXT NOT NULL, language TEXT NOT NULL, niche_slug TEXT,
+  status TEXT NOT NULL DEFAULT 'observe',        -- observe | a_rechercher | recherche | produit | rejete
+  first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+  last_searched_at TEXT
+);
+CREATE TABLE IF NOT EXISTS keyword_signals(       -- où le mot-clé a été observé
+  keyword_id INTEGER NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,                          -- youtube | google_trends | manuel
+  ref TEXT NOT NULL,                             -- id vidéo YouTube, id tendance, id saisie
+  country TEXT, observed_at TEXT NOT NULL,
+  PRIMARY KEY(keyword_id, source, ref)
+);
+CREATE TABLE IF NOT EXISTS query_log(
+  query TEXT NOT NULL, language TEXT NOT NULL, region TEXT NOT NULL,
+  origin TEXT, niche_slug TEXT, last_searched_at TEXT, results INTEGER,
+  PRIMARY KEY(query, language, region)
+);
+CREATE TABLE IF NOT EXISTS api_usage(
+  day TEXT NOT NULL, api TEXT NOT NULL, units INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(day, api)
+);
+CREATE TABLE IF NOT EXISTS search_runs(           -- une ligne par recherche (bouton ou planifiée)
+  id INTEGER PRIMARY KEY, trigger TEXT, mode TEXT, started_at TEXT NOT NULL, finished_at TEXT,
+  status TEXT NOT NULL DEFAULT 'en_cours', sources_json TEXT, new_keywords INTEGER, new_products INTEGER,
+  errors_json TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_signals_source ON keyword_signals(source, ref);

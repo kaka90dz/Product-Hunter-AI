@@ -3,7 +3,8 @@ import streamlit as st
 from phai import config, queries
 
 st.title("📈 Tendances")
-st.caption("Recherches Google en forte hausse, par pays. Source : Google Trends (flux RSS public).")
+st.caption("Recherches Google en forte hausse, par pays (source : flux RSS public Google Trends). Surtout de "
+           "l'actualité : utilisées seulement pour confirmer des produits déjà repérés ailleurs.")
 
 countries = {c["code"]: c["name_fr"] for c in config.countries()}
 col1, col2 = st.columns([2, 1])

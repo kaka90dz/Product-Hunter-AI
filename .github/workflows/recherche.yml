@@ -1,0 +1,59 @@
+name: Recherche de produits (mode Eco, sans IA)
+
+on:
+  schedule:
+    - cron: "17 5 * * *"            # chaque jour à 05:17 UTC
+  workflow_dispatch:                 # bouton du tableau de bord ou bouton « Run workflow »
+    inputs:
+      declencheur:
+        description: "Origine du lancement"
+        type: string
+        default: manuel
+      force:
+        description: "Ignorer le cache"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write                    # uniquement pour enregistrer les données dans la branche data
+
+concurrency:                         # jamais deux écritures simultanées
+  group: data-write
+  cancel-in-progress: false
+
+jobs:
+  recherche:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15              # plafond de consommation des minutes gratuites
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: datastore
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - name: Recherche
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          PHAI_DATA_DIR: datastore
+          PHAI_TRIGGER: ${{ inputs.declencheur || 'planifiee' }}
+        run: python -m phai run ${{ inputs.force && '--force' || '' }}
+      - name: Résumé
+        env:
+          PHAI_DATA_DIR: datastore
+        run: python -m phai status
+      - name: Enregistrer les données
+        working-directory: datastore
+        run: |
+          git config user.name "product-hunter-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add market.db
+          if git diff --cached --quiet; then echo "Aucune nouvelle donnée"; exit 0; fi
+          git commit -q -m "Données : recherche du $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull -q --rebase origin data && git push -q origin HEAD:data && exit 0; sleep 5; done
+          exit 1

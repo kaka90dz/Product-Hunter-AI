@@ -20,15 +20,19 @@ Lire `CAHIER_DES_CHARGES.md` pour le besoin complet. Ce fichier ne résume que l
 ## Architecture
 - `phai/` : moteur Python. `collectors/` (une source = un module avec `collect(force)`), `runs.py` (journal + cache),
   `config.py` (YAML + surcharges user.db), `queries.py` (lectures du tableau de bord).
-- `data/market.db` : données collectées (écrit par GitHub Actions). `data/user.db` : favoris/réglages (écrit par l'interface).
+- Données : branche `data` (`market.db` écrit par GitHub Actions, `user.db` écrit par le tableau de bord).
+  En local : dossier `data/` (ignoré par Git) ou `PHAI_DATA_DIR`. Récupérer : `git fetch origin data`.
+- Découverte : `discovery.py` (plan YouTube + boule de neige), `extract.py` (noms de produits, règles),
+  `risk.py`, `scoring.py` (score partiel), `retention.py`, `pipeline.py` (recherche complète).
+- Règles YouTube : pas d'indicateur dérivé des stats YouTube, données < 30 jours (voir DECISIONS.md D4).
 - `streamlit_app.py` + `pages/` : tableau de bord (Streamlit Community Cloud).
 - `.github/workflows/` : collectes programmées (gratuites, sans Claude).
 - Pays : `config/countries.yaml` — attention, citer `"NO"` (sinon YAML lit `false`).
 
 ## Commandes
 - `pip install -r requirements-dev.txt`
-- `python -m phai collect [source] [--force]` · `python -m phai status` · `python -m pytest -q`
+- `python -m phai run [--force]` (recherche complète) · `python -m phai status` · `python -m pytest -q`
 - `streamlit run streamlit_app.py`
 
 ## Avancement
-Voir `docs/AVANCEMENT.md` (à mettre à jour à chaque étape). Commit + push après chaque étape.
+Lire `PROGRESS.md` et `DECISIONS.md` en début de session. Les mettre à jour à chaque étape, puis commit + push.

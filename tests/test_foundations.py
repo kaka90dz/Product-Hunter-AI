@@ -35,8 +35,10 @@ def test_iso_duration():
 
 
 def test_youtube_without_key_is_skipped(monkeypatch, tmp_db):
+    from phai import discovery
     monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
-    assert "ignore" in yt.collect()
+    with db.connect(config.MARKET_DB) as con:
+        assert discovery.youtube_discovery(con)["statut"] == "non_configure"
 
 
 def test_reference_data_and_norway(tmp_db):

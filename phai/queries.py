@@ -20,6 +20,8 @@ def counts() -> dict:
         "tendances": "SELECT COUNT(*) n FROM trend_signals",
         "pays_tendances": "SELECT COUNT(DISTINCT country) n FROM trend_signals",
         "produits": "SELECT COUNT(*) n FROM products",
+        "candidats": "SELECT COUNT(*) n FROM products WHERE status='candidat'",
+        "mots_cles": "SELECT COUNT(*) n FROM keywords",
         "niches": "SELECT COUNT(*) n FROM niches",
         "videos": "SELECT COUNT(*) n FROM videos",
     }
@@ -88,3 +90,100 @@ def sources() -> pd.DataFrame:
                "needs_key AS cle_requise, free_quota AS quota, notes, last_checked AS verifie_le "
                "FROM sources ORDER BY CASE status WHEN 'actif' THEN 0 WHEN 'a_configurer' THEN 1 "
                "WHEN 'manuel' THEN 2 ELSE 3 END, name")
+
+
+# ----------------------------------------------------------------------------- produits
+def _udf(sql: str, params=()) -> pd.DataFrame:
+    if not config.USER_DB.exists():
+        return pd.DataFrame()
+    with db.connect(config.USER_DB) as con:
+        return pd.read_sql_query(sql, con, params=params)
+
+
+def products() -> pd.DataFrame:
+    d = _df(
+        "SELECT p.id, p.canonical_name AS produit, p.language AS langue, n.name_fr AS niche, p.status AS statut, "
+        "p.status_reason AS motif, p.origin AS origine, p.first_seen AS decouvert_le, s.score AS points, "
+        "s.confidence AS confiance, s.details_json, s.computed_at AS note_le "
+        "FROM products p LEFT JOIN niches n ON n.id=p.niche_id "
+        "LEFT JOIN scores s ON s.id=(SELECT MAX(id) FROM scores WHERE product_id=p.id) "
+        "ORDER BY s.score DESC NULLS LAST, p.first_seen DESC")
+    if d.empty:
+        return d
+    det = d["details_json"].map(lambda j: json.loads(j) if j else {})
+    d["max_evaluable"] = det.map(lambda x: x.get("max_evaluable"))
+    d["createurs"] = det.map(lambda x: x.get("createurs_independants"))
+    d["sources"] = det.map(lambda x: x.get("types_de_sources"))
+    d["details"] = det
+    return d.drop(columns=["details_json"])
+
+
+def product_videos(product_id: int) -> pd.DataFrame:
+    return _df(
+        "SELECT v.title AS titre, v.channel_title AS chaine, v.url, v.region AS region_recherche, v.format_hint AS format, "
+        "v.published_at AS publie_le, st.views AS vues, st.likes AS likes, st.comments AS commentaires, "
+        "st.collected_at AS releve_le FROM products p JOIN keyword_signals ks ON ks.keyword_id=p.keyword_id "
+        "AND ks.source='youtube' JOIN videos v ON v.external_id=ks.ref "
+        "LEFT JOIN video_stats st ON st.video_id=v.id AND st.collected_at=(SELECT MAX(collected_at) FROM video_stats "
+        "WHERE video_id=v.id) WHERE p.id=? ORDER BY st.views DESC", (product_id,))
+
+
+def product_trends(product_id: int) -> pd.DataFrame:
+    return _df(
+        "SELECT t.country AS pays, t.term AS recherche, t.approx_traffic AS trafic, t.collected_at AS collecte_le, t.url "
+        "FROM products p JOIN keyword_signals ks ON ks.keyword_id=p.keyword_id AND ks.source='google_trends' "
+        "JOIN trend_signals t ON 't' || t.id = ks.ref WHERE p.id=?", (product_id,))
+
+
+def product_risks(product_id: int) -> pd.DataFrame:
+    return _df("SELECT kind AS type, severity AS gravite, description, source, collected_at AS detecte_le "
+               "FROM risks WHERE product_id=?", (product_id,))
+
+
+def youtube_videos(limit: int = 300) -> pd.DataFrame:
+    return _df(
+        "SELECT v.title AS titre, v.channel_title AS chaine, v.url, v.language AS langue, v.region AS region_recherche, "
+        "v.format_hint AS format, v.query AS requete, v.published_at AS publie_le, st.views AS vues, st.likes AS likes, "
+        "st.comments AS commentaires, st.channel_subscribers AS abonnes, st.collected_at AS releve_le "
+        "FROM videos v LEFT JOIN video_stats st ON st.video_id=v.id AND st.collected_at="
+        "(SELECT MAX(collected_at) FROM video_stats WHERE video_id=v.id) "
+        "WHERE v.platform='youtube' ORDER BY st.views DESC LIMIT ?", (limit,))
+
+
+def keywords_summary() -> pd.DataFrame:
+    return _df(
+        "SELECT k.term AS mot_cle, k.language AS langue, k.status AS statut, k.first_seen AS vu_le, "
+        "(SELECT COUNT(*) FROM keyword_signals ks WHERE ks.keyword_id=k.id) AS observations "
+        "FROM keywords k ORDER BY observations DESC, k.last_seen DESC LIMIT 500")
+
+
+def last_search() -> dict | None:
+    d = _df("SELECT * FROM search_runs ORDER BY id DESC LIMIT 1")
+    if d.empty:
+        return None
+    r = d.iloc[0].to_dict()
+    r["sources"] = json.loads(r["sources_json"]) if r.get("sources_json") else {}
+    r["erreurs"] = json.loads(r["errors_json"]) if r.get("errors_json") else []
+    return r
+
+
+def youtube_units_today() -> int:
+    d = _df("SELECT units FROM api_usage WHERE api='youtube' AND day=date('now')")
+    return 0 if d.empty else int(d["units"].iloc[0])
+
+
+def favorites() -> pd.DataFrame:
+    return _udf("SELECT id, product_name AS produit, country AS pays, list_name AS liste, note, updated_at AS modifie_le "
+                "FROM favorites ORDER BY updated_at DESC")
+
+
+def manual_videos() -> pd.DataFrame:
+    d = _udf("SELECT * FROM manual_videos ORDER BY created_at DESC")
+    if d.empty:
+        return d
+    pub = pd.to_datetime(d["published_at"], errors="coerce", utc=True)
+    obs = pd.to_datetime(d["observed_at"], errors="coerce", utc=True)
+    days = ((obs - pub).dt.total_seconds() / 86400).clip(lower=1)
+    d["vues_par_jour (calcul)"] = (d["views"] / days).round(0)
+    d["vues/abonnés (calcul)"] = (d["views"] / d["account_followers"]).round(2)
+    return d

@@ -44,5 +44,15 @@ youtube:
     es: ["productos virales tiktok"]
     it: ["prodotti virali tiktok"]
   regions: ["US", "GB", "FR", "DE", "ES", "IT", "AU", "CA"]
-resident_country: FR
-legal_status: a_preciser       # particulier | micro_entreprise | societe | a_preciser
+discovery:
+  youtube_units_per_run: 3000     # 1 recherche = 100 unités
+  youtube_units_per_day: 8000     # plafond quotidien (quota gratuit Google : 10 000)
+  max_results_per_search: 50
+  seed_refresh_days: 7            # une requête de départ n'est pas relancée avant ce délai
+  snowball_share: 0.4             # part du budget pour approfondir les nouveaux mots-clés
+  snowball_refresh_days: 14
+  min_channels_for_product: 2     # nb de créateurs différents pour créer un produit candidat
+retention_days:
+  youtube_api_data: 29            # règles YouTube : supprimer ou rafraîchir sous 30 jours
+  google_trends: 180
+  collection_runs: 365
