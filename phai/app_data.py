@@ -18,12 +18,41 @@ from phai.store import ConflictError, GitHubStore
 CACHE_DIR = Path(tempfile.gettempdir()) / "phai-data"
 
 
+TOKEN_NAMES = ("token", "GITHUB_TOKEN", "github_token", "GH_TOKEN")
+
+
 def _secrets() -> dict | None:
+    """Accepte la section [github] (recommandée) ou un jeton placé directement à la racine des secrets."""
     try:
-        g = st.secrets.get("github")
+        sec = st.secrets
+        g = sec.get("github")
+        if g and any(g.get(n) for n in TOKEN_NAMES):
+            g = dict(g)
+            return {**g, "token": next(g[n] for n in TOKEN_NAMES if g.get(n))}
+        for n in TOKEN_NAMES:
+            if sec.get(n):
+                return {"token": sec[n], "repo": sec.get("repo", "kaka90dz/Product-Hunter-AI"),
+                        "data_branch": sec.get("data_branch", "data")}
     except Exception:  # noqa: BLE001 — pas de fichier secrets en local
         return None
-    return dict(g) if g and g.get("token") else None
+    return None
+
+
+def secret_names() -> list[str]:
+    """Noms (jamais les valeurs) des secrets visibles, pour le diagnostic."""
+    try:
+        out = []
+        for k in st.secrets.keys():
+            v = st.secrets[k]
+            out.append(f"[{k}] → " + ", ".join(v.keys()) if hasattr(v, "keys") else k)
+        return out
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def on_streamlit_cloud() -> bool:
+    import os
+    return os.path.isdir("/mount/src") or os.environ.get("HOSTNAME", "").startswith("streamlit")
 
 
 @st.cache_resource

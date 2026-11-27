@@ -10,6 +10,12 @@ st.markdown("""<style>
 @media (max-width:640px){.block-container{padding-left:.8rem;padding-right:.8rem}}
 </style>""", unsafe_allow_html=True)
 
+if not app_data.hosted() and app_data.on_streamlit_cloud():
+    names = app_data.secret_names()
+    st.error("**Jeton GitHub introuvable** : le tableau de bord ne peut ni lire vos données ni lancer de recherche.  \n"
+             "Secrets détectés (noms uniquement) : " + (", ".join(names) if names else "aucun") + ".  \n"
+             "Dans **Manage app → ⋮ → Settings → Secrets**, collez exactement le modèle du guide "
+             "(section `[github]` avec `token = \"…\"`), puis **Save**.")
 try:
     app_data.sync()
 except Exception as e:  # noqa: BLE001
